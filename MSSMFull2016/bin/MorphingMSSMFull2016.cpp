@@ -373,7 +373,7 @@ int main(int argc, char** argv) {
   }
 
 
- //Now delete processes with 0 yield
+ //Now delete processes with 0 yield except signals
  cb.FilterProcs([&](ch::Process *p) {
   bool null_yield = !(p->rate() > 0. || BinIsSBControlRegion(p));
   if (null_yield && !p->signal()){
@@ -383,8 +383,9 @@ int main(int argc, char** argv) {
        bool remove_syst = (MatchingProcess(*p,*s));
        return remove_syst;
     });
+    return true;
   }
-  return null_yield;
+  return false;
  });
 
 
