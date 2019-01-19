@@ -36,6 +36,15 @@ class MSSMHiggsModel(PhysicsModel):
             'br_Hhh'        : 'br_H_hh',
             'br_AZh'        : 'br_A_Zh'
         }
+        self.h_dict[2] = {
+            'mH'  : 'm_H',
+            'mh'  : 'm_h',
+            'mHp' : 'm_Hp',
+            'br_tHpb'       : 'br_t_Hpb',
+            'br_Hptaunu'    : 'br_Hp_taunu',
+            'br_Hhh'        : 'br_H_hh',
+            'br_AZh'        : 'br_A_Zh'
+        }
         for X in ['h', 'H', 'A']:
             self.h_dict[0].update({
                 'xs_gg%s'%X     : 'h_ggF_xsec_%s'%X,
@@ -78,6 +87,18 @@ class MSSMHiggsModel(PhysicsModel):
                 'xs_bb5f%s_pdf_lo'%X    : 'xs_bb5F_%s_pdfasDown'%X, # abs(-uncert)
                 'xs_bb5f%s_alphas_hi'%X : '',
                 'xs_bb5f%s_alphas_lo'%X : ''
+                })
+            self.h_dict[2].update({
+                'xs_gg%s'%X     : 'xs_gg_%s'%X,
+                'xs_bb%s'%X   : 'xs_bb_%s'%X,
+                'br_%stautau'%X : 'br_%s_tautau'%X,
+                'br_%sbb'%X     : 'br_%s_bb'%X,
+                'xs_gg%s_scale_lo'%X    : 'xs_gg_%s_scaledown'%X, # - uncert
+                'xs_gg%s_scale_hi'%X    : 'xs_gg_%s_scaleup'%X, # + uncert
+                'xs_gg%s_pdf_lo'%X      : 'xs_gg_%s_pdfasdown'%X,   # - uncert
+                'xs_gg%s_pdf_hi'%X      : 'xs_gg_%s_pdfasup'%X,   # + uncert
+                'xs_bb%s_lo'%X  : 'xs_bb_%s_down'%X,  # - uncert
+                'xs_bb%s_hi'%X  : 'xs_bb_%s_up'%X,    # + uncert
                 })
         # Define the known production and decay processes
         # These are strings we will look for in the process names to
@@ -301,16 +322,27 @@ class MSSMHiggsModel(PhysicsModel):
                     self.add_ggH_at_NLO('xs_gg{X}{LC}_%s' %era, X)
             #! [part3]
                 # QCD scale uncertainty
-                self.doAsymPow('systeff_xs_gg%s_scale_%s' % (X,era),
-                    self.safeTH2DivideForKappa(f.Get(hd['xs_gg%s_scale_lo'%X]), f.Get(hd['xs_gg%s'%X])),
-                    self.safeTH2DivideForKappa(f.Get(hd['xs_gg%s_scale_hi'%X]), f.Get(hd['xs_gg%s'%X])),
-                    'xs_gg%s_scale_%s' % (X,era), pars)
+                if version == 2:
+                    self.doAsymPow('systeff_xs_gg%s_scale_%s' % (X,era),
+                        self.safeTH2DivideForKappaDelta(f.Get(hd['xs_gg%s_scale_lo'%X]), f.Get(hd['xs_gg%s'%X]), +1.),
+                        self.safeTH2DivideForKappaDelta(f.Get(hd['xs_gg%s_scale_hi'%X]), f.Get(hd['xs_gg%s'%X]), +1.),
+                        'xs_gg%s_scale_%s' % (X,era), pars)
+                else:
+                    self.doAsymPow('systeff_xs_gg%s_scale_%s' % (X,era),
+                        self.safeTH2DivideForKappa(f.Get(hd['xs_gg%s_scale_lo'%X]), f.Get(hd['xs_gg%s'%X])),
+                        self.safeTH2DivideForKappa(f.Get(hd['xs_gg%s_scale_hi'%X]), f.Get(hd['xs_gg%s'%X])),
+                        'xs_gg%s_scale_%s' % (X,era), pars)
                 # PDF uncertainty
                 if version == 0:
                     # In earlier model files pdf uncertainties are given as
                     # shifts wrt the nominal...
                     self.doAsymPow('systeff_xs_gg%s_pdf_%s' % (X,era),
                         self.safeTH2DivideForKappaDelta(f.Get(hd['xs_gg%s_pdf_lo'%X]), f.Get(hd['xs_gg%s'%X]), -1.),
+                        self.safeTH2DivideForKappaDelta(f.Get(hd['xs_gg%s_pdf_hi'%X]), f.Get(hd['xs_gg%s'%X]), +1.),
+                        'xs_gg%s_pdf_%s' % (X,era), pars)
+                elif version == 2:
+                    self.doAsymPow('systeff_xs_gg%s_pdf_%s' % (X,era),
+                        self.safeTH2DivideForKappaDelta(f.Get(hd['xs_gg%s_pdf_lo'%X]), f.Get(hd['xs_gg%s'%X]), +1.),
                         self.safeTH2DivideForKappaDelta(f.Get(hd['xs_gg%s_pdf_hi'%X]), f.Get(hd['xs_gg%s'%X]), +1.),
                         'xs_gg%s_pdf_%s' % (X,era), pars)
                 else:
@@ -329,50 +361,62 @@ class MSSMHiggsModel(PhysicsModel):
                         self.SYST_DICT['xs_gg%s%s_%s' % (X, loopcontrib, era)].append('systeff_xs_gg%s_scale_%s' % (X,era))
                         self.SYST_DICT['xs_gg%s%s_%s' % (X, loopcontrib, era)].append('systeff_xs_gg%s_pdf_%s' % (X,era))
 
-                # Build the Santander-matched bbX cross section. The matching depends
-                # on the mass of the Higgs boson in question, so for the h and H we
-                # pass the mh or mH TH2 as an additional argument
-                hist_bb_nominal = self.santanderMatching(f.Get(hd['xs_bb4f%s'%X]), f.Get(hd['xs_bb5f%s'%X]), None if X=='A' else f.Get(hd['m%s'%X]))
-                self.doHistFunc('xs_bb%s_%s' % (X, era), hist_bb_nominal, pars)
+                if version == 2:
+                    self.doHistFunc('xs_bb%s_%s' % (X, era), f.Get(hd['xs_bb%s'%X]), pars)
 
-                # QCD scale uncertainty
-                self.doAsymPow('systeff_xs_bb%s_scale_%s' % (X,era),
-                    self.safeTH2DivideForKappa(
-                        self.santanderMatching(f.Get(hd['xs_bb4f%s_scale_lo'%X]), f.Get(hd['xs_bb5f%s_scale_lo'%X]), None if X=='A' else f.Get(hd['m%s'%X])),
-                        hist_bb_nominal
-                        ),
-                    self.safeTH2DivideForKappa(
-                        self.santanderMatching(f.Get(hd['xs_bb4f%s_scale_hi'%X]), f.Get(hd['xs_bb5f%s_scale_hi'%X]), None if X=='A' else f.Get(hd['m%s'%X])),
-                        hist_bb_nominal
-                        ),
-                    'xs_bb%s_scale_%s' % (X,era), pars)
+                    # bbH total uncertainty
+                    self.doAsymPow('systeff_xs_bb%s_total_%s' % (X,era),
+                        self.safeTH2DivideForKappaDelta(f.Get(hd['xs_bb%s_lo'%X]), f.Get(hd['xs_bb%s'%X]), +1.),
+                        self.safeTH2DivideForKappaDelta(f.Get(hd['xs_bb%s_hi'%X]), f.Get(hd['xs_bb%s'%X]), +1.),
+                        'xs_bb%s_total_%s' % (X,era), pars)
 
-                # PDF uncertainty
-                if version == 0:
-                    self.doAsymPow('systeff_xs_bb%s_pdf_%s' % (X,era),
-                        self.safeTH2DivideForKappaDelta(
-                            self.santanderPdfUncert(f.Get(hd['xs_bb5f%s_pdf_lo'%X]), None if X=='A' else f.Get(hd['m%s'%X])),
-                            hist_bb_nominal, -1.
-                            ),
-                        self.safeTH2DivideForKappaDelta(
-                            self.santanderPdfUncert(f.Get(hd['xs_bb5f%s_pdf_hi'%X]), None if X=='A' else f.Get(hd['m%s'%X])),
-                            hist_bb_nominal, +1.
-                            ),
-                        'xs_bb%s_pdf_%s' % (X,era), pars)
+                    self.SYST_DICT['xs_bb%s_%s' % (X, era)].append('systeff_xs_bb%s_total_%s' % (X,era))
+
                 else:
-                    self.doAsymPow('systeff_xs_bb%s_pdf_%s' % (X,era),
-                        self.safeTH2DivideForKappaDelta(
-                            self.santanderPdfUncert2(f.Get(hd['xs_bb5f%s_pdf_lo'%X]), f.Get(hd['xs_bb5f%s'%X]), None if X=='A' else f.Get(hd['m%s'%X])),
-                            hist_bb_nominal, -1.
-                            ),
-                        self.safeTH2DivideForKappaDelta(
-                            self.santanderPdfUncert2(f.Get(hd['xs_bb5f%s_pdf_hi'%X]), f.Get(hd['xs_bb5f%s'%X]), None if X=='A' else f.Get(hd['m%s'%X])),
-                            hist_bb_nominal, +1.
-                            ),
-                        'xs_bb%s_pdf_%s' % (X,era), pars)
+                    # Build the Santander-matched bbX cross section. The matching depends
+                    # on the mass of the Higgs boson in question, so for the h and H we
+                    # pass the mh or mH TH2 as an additional argument
+                    hist_bb_nominal = self.santanderMatching(f.Get(hd['xs_bb4f%s'%X]), f.Get(hd['xs_bb5f%s'%X]), None if X=='A' else f.Get(hd['m%s'%X]))
+                    self.doHistFunc('xs_bb%s_%s' % (X, era), hist_bb_nominal, pars)
 
-                self.SYST_DICT['xs_bb%s_%s' % (X, era)].append('systeff_xs_bb%s_scale_%s' % (X,era))
-                self.SYST_DICT['xs_bb%s_%s' % (X, era)].append('systeff_xs_bb%s_pdf_%s' % (X,era))
+                    # QCD scale uncertainty
+                    self.doAsymPow('systeff_xs_bb%s_scale_%s' % (X,era),
+                        self.safeTH2DivideForKappa(
+                            self.santanderMatching(f.Get(hd['xs_bb4f%s_scale_lo'%X]), f.Get(hd['xs_bb5f%s_scale_lo'%X]), None if X=='A' else f.Get(hd['m%s'%X])),
+                            hist_bb_nominal
+                            ),
+                        self.safeTH2DivideForKappa(
+                            self.santanderMatching(f.Get(hd['xs_bb4f%s_scale_hi'%X]), f.Get(hd['xs_bb5f%s_scale_hi'%X]), None if X=='A' else f.Get(hd['m%s'%X])),
+                            hist_bb_nominal
+                            ),
+                        'xs_bb%s_scale_%s' % (X,era), pars)
+
+                    # PDF uncertainty
+                    if version == 0:
+                        self.doAsymPow('systeff_xs_bb%s_pdf_%s' % (X,era),
+                            self.safeTH2DivideForKappaDelta(
+                                self.santanderPdfUncert(f.Get(hd['xs_bb5f%s_pdf_lo'%X]), None if X=='A' else f.Get(hd['m%s'%X])),
+                                hist_bb_nominal, -1.
+                                ),
+                            self.safeTH2DivideForKappaDelta(
+                                self.santanderPdfUncert(f.Get(hd['xs_bb5f%s_pdf_hi'%X]), None if X=='A' else f.Get(hd['m%s'%X])),
+                                hist_bb_nominal, +1.
+                                ),
+                            'xs_bb%s_pdf_%s' % (X,era), pars)
+                    else:
+                        self.doAsymPow('systeff_xs_bb%s_pdf_%s' % (X,era),
+                            self.safeTH2DivideForKappaDelta(
+                                self.santanderPdfUncert2(f.Get(hd['xs_bb5f%s_pdf_lo'%X]), f.Get(hd['xs_bb5f%s'%X]), None if X=='A' else f.Get(hd['m%s'%X])),
+                                hist_bb_nominal, -1.
+                                ),
+                            self.safeTH2DivideForKappaDelta(
+                                self.santanderPdfUncert2(f.Get(hd['xs_bb5f%s_pdf_hi'%X]), f.Get(hd['xs_bb5f%s'%X]), None if X=='A' else f.Get(hd['m%s'%X])),
+                                hist_bb_nominal, +1.
+                                ),
+                            'xs_bb%s_pdf_%s' % (X,era), pars)
+
+                    self.SYST_DICT['xs_bb%s_%s' % (X, era)].append('systeff_xs_bb%s_scale_%s' % (X,era))
+                    self.SYST_DICT['xs_bb%s_%s' % (X, era)].append('systeff_xs_bb%s_pdf_%s' % (X,era))
 
                 self.doHistFunc('br_%stautau_%s' % (X, era), f.Get(hd['br_%stautau'%X]), pars)
                 self.doHistFunc('br_%sbb_%s' % (X, era), f.Get(hd['br_%sbb'%X]), pars)
