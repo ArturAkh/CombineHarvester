@@ -669,7 +669,7 @@ int main(int argc, char** argv) {
           norm = "prenorm";
         }
         std::string pdf_name = ch::BuildRooMorphing(
-            ws, cb, b, p, *(mass_var[p]), norm, true, false, false, &demo);
+            ws, cb, b, p, *(mass_var[p]), norm, true, true, true, &demo);
         if (mass == "MH" && ggHatNLO && ch::contains(signal_types["ggH"], p)) {
           ws.factory(TString::Format("expr::%s_norm('@0*@1',%s, %s_frac)",
                                      pdf_name.c_str(),

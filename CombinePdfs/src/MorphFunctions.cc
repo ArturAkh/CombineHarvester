@@ -416,16 +416,23 @@ std::string BuildRooMorphing(RooWorkspace& ws, CombineHarvester& cb,
   vector<double> new_m_vec(m_vec);
   // Insert an entry at either end of the vector for a mass just slightly
   // outside of the range
-  new_m_vec.insert(new_m_vec.begin(),m_vec[0]-1E-6);
-  new_m_vec.push_back(m_vec[m-1]+1E-6);
+  new_m_vec.insert(new_m_vec.begin(),0.0);
+  new_m_vec.push_back(13000.0);
   // Create a corresponding rate array with 0 entries for these new masses
   multi_array<double, 1> new_rate_arr(extents[m+2]);
-  new_rate_arr[0] = 0.0;
-  for(unsigned i = 0; i < m; ++i) new_rate_arr[i+1] = rate_arr[i] ;
-  new_rate_arr[m+1] = 0.0;
+  multi_array<double, 1> new_rate_unc_arr(extents[m+2]);
+  new_rate_arr[0] = rate_arr[0];
+  new_rate_unc_arr[0] = rate_unc_arr[0];
+  for(unsigned i = 0; i < m; ++i)
+  {
+        new_rate_arr[i+1] = rate_arr[i] ;
+        new_rate_unc_arr[i+1] = rate_unc_arr[i] ;
+  }
+  new_rate_arr[m+1] = rate_arr[m-1];
+  new_rate_unc_arr[m+1] = rate_unc_arr[m-1];
  
   if (verbose && force_template_limit) {
-     std::cout << ">>>> Forcing rate to 0 outside of template range:" << "\n";
+     std::cout << ">>>> Forcing rate to values at range borders outside of template range:" << "\n";
      for(unsigned mi = 0; mi < m+2; ++mi) {
         std::cout << boost::format("%-10.5g") % new_m_vec[mi];
      }
@@ -438,14 +445,14 @@ std::string BuildRooMorphing(RooWorkspace& ws, CombineHarvester& cb,
   // Create the 1D spline directly from the rate array
   //! [part4]
   RooSpline1D rate_spline("interp_rate_"+key, "", mass_var, 
-                        force_template_limit ? m+2 : m, 
+                        force_template_limit ? m+2 : m,
                         force_template_limit ? new_m_vec.data() : m_vec.data(),
                         force_template_limit ? new_rate_arr.data() : rate_arr.data(),
                         interp);
   //! [part4]
 
   if (file) {
-    TGraphErrors tmp(m, m_vec.data(), rate_arr.data(), nullptr, rate_unc_arr.data());
+    TGraphErrors tmp(force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(), force_template_limit ? new_rate_arr.data() : rate_arr.data(), nullptr, force_template_limit ? new_rate_unc_arr.data() : rate_unc_arr.data());
     file->WriteTObject(&tmp, "interp_rate_"+key);
   }
   // Collect all terms that will go into the total normalisation:
@@ -454,15 +461,15 @@ std::string BuildRooMorphing(RooWorkspace& ws, CombineHarvester& cb,
   // For each shape systematic build a 1D spline for kappa_hi and kappa_lo
   for (unsigned ssi = 0; ssi < ss; ++ssi) {
     ss_spl_hi_arr[ssi] = std::make_shared<RooSpline1D>("spline_hi_" +
-        key + "_" + ss_vec[ssi], "", mass_var, m, m_vec.data(),
+        key + "_" + ss_vec[ssi], "", mass_var, force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(),
         ss_k_hi_arr[ssi].origin(), interp);
     ss_spl_lo_arr[ssi] = std::make_shared<RooSpline1D>("spline_lo_" +
-        key + "_" + ss_vec[ssi], "", mass_var, m, m_vec.data(),
+        key + "_" + ss_vec[ssi], "", mass_var, force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(),
         ss_k_lo_arr[ssi].origin(), interp);
     if (file) {
-      TGraph tmp_hi(m, m_vec.data(), ss_k_hi_arr[ssi].origin());
+      TGraph tmp_hi(force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(), ss_k_hi_arr[ssi].origin());
       file->WriteTObject(&tmp_hi, "spline_hi_" + key + "_" + ss_vec[ssi]);
-      TGraph tmp_lo(m, m_vec.data(), ss_k_lo_arr[ssi].origin());
+      TGraph tmp_lo(force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(), ss_k_lo_arr[ssi].origin());
       file->WriteTObject(&tmp_lo, "spline_lo_" + key + "_" + ss_vec[ssi]);
     }
     // Then build the AsymPow object for each systematic as a function of the
@@ -477,10 +484,10 @@ std::string BuildRooMorphing(RooWorkspace& ws, CombineHarvester& cb,
   // then the AsymPows and add to the rate_prod list
   for (unsigned lmsi = 0; lmsi < lms; ++lmsi) {
     lms_spl_hi_arr[lmsi] = std::make_shared<RooSpline1D>("spline_hi_" +
-        key + "_" + lms_vec[lmsi], "", mass_var, m, m_vec.data(),
+        key + "_" + lms_vec[lmsi], "", mass_var, force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(),
         lms_k_hi_arr[lmsi].origin(), interp);
     lms_spl_lo_arr[lmsi] = std::make_shared<RooSpline1D>("spline_lo_" +
-        key + "_" + lms_vec[lmsi], "", mass_var, m, m_vec.data(),
+        key + "_" + lms_vec[lmsi], "", mass_var, force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(),
         lms_k_lo_arr[lmsi].origin(), interp);
     lms_asy_arr[lmsi] = std::make_shared<AsymPow>("systeff_" +
         key + "_" + lms_vec[lmsi], "", *(lms_spl_lo_arr[lmsi]),
@@ -521,7 +528,9 @@ std::string BuildRooMorphing(RooWorkspace& ws, CombineHarvester& cb,
   // text2workspace builds for every process), one per mass point
   multi_array<std::shared_ptr<FastVerticalInterpHistPdf2>, 1> vpdf_arr(
       extents[m]);
+  multi_array<std::shared_ptr<FastVerticalInterpHistPdf2>, 1> new_vpdf_arr(extents[m+2]);
   RooArgList vpdf_list;
+  RooArgList new_vpdf_list;
 
   TString vert_name = key + "_";
 
@@ -532,15 +541,23 @@ std::string BuildRooMorphing(RooWorkspace& ws, CombineHarvester& cb,
     if (ss_scale_arr[ssi] < qrange) qrange = ss_scale_arr[ssi];
   }
 
+  new_vpdf_arr[0] = std::make_shared<FastVerticalInterpHistPdf2>(vert_name + "0" + "_vmorph", "", morph_xvar, *(list_arr[0]), ss_list, qrange, 0);
+  new_vpdf_list.add(*(new_vpdf_arr[0]));
   for (unsigned mi = 0; mi < m; ++mi) {
     // Construct it with the right binning, the right histograms and the right
     // scaling parameters
     vpdf_arr[mi] = std::make_shared<FastVerticalInterpHistPdf2>(
         vert_name + m_str_vec[mi] + "_vmorph", "", morph_xvar, *(list_arr[mi]),
         ss_list, qrange, 0);
+    new_vpdf_arr[mi+1] = std::make_shared<FastVerticalInterpHistPdf2>(
+        vert_name + m_str_vec[mi] + "_vmorph", "", morph_xvar, *(list_arr[mi]),
+        ss_list, qrange, 0);
     // Add it to a list that we'll supply to the RooMorphingPdf
     vpdf_list.add(*(vpdf_arr[mi]));
+    new_vpdf_list.add(*(new_vpdf_arr[mi+1]));
   }
+  new_vpdf_arr[m+1] = std::make_shared<FastVerticalInterpHistPdf2>(vert_name + "13000" + "_vmorph", "", morph_xvar, *(list_arr[m-1]), ss_list, qrange, 0);
+  new_vpdf_list.add(*(new_vpdf_arr[m+1]));
   TString morph_name = key + "_morph";
   // At long last, we can build our pdf, giving it:
   //   xvar :       the fixed "CMS_th1x" x-axis variable with uniform integer binning
@@ -551,8 +568,8 @@ std::string BuildRooMorphing(RooWorkspace& ws, CombineHarvester& cb,
   //   data_hist.GetXaxis(): The original (non-uniform) target binning
   //   proc_hist.GetXaxis(): The original (non-uniform) morphing binning
   //! [part5]
-  RooMorphingPdf morph_pdf(morph_name, "", xvar, mass_var, vpdf_list,
-                           m_vec, allow_morph, *(data_hist.GetXaxis()),
+  RooMorphingPdf morph_pdf(morph_name, "", xvar, mass_var, force_template_limit ? new_vpdf_list : vpdf_list,
+                           force_template_limit ? new_m_vec : m_vec, allow_morph, *(data_hist.GetXaxis()),
                            *(proc_hist.GetXaxis()));
   //! [part5]
   // And we can make the final normalisation product
@@ -566,7 +583,7 @@ std::string BuildRooMorphing(RooWorkspace& ws, CombineHarvester& cb,
   //! [part6]
 
   // Dump even more plots
-  if (file) MakeMorphDebugPlots(&morph_pdf, &mass_var, m_vec, file, &data_hist);
+  if (file) MakeMorphDebugPlots(&morph_pdf, &mass_var, force_template_limit ? new_m_vec : m_vec, file, &data_hist);
 
   // Load our pdf and norm objects into the workspace
   ws.import(morph_pdf, RooFit::RecycleConflictNodes());
