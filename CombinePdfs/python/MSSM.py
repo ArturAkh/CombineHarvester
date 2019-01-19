@@ -304,8 +304,24 @@ class MSSMHiggsModel(PhysicsModel):
             # assumption that they are the same in all model files
             if not doneMasses:
             #! [part1]
-                self.doHistFunc('mH', f.Get(hd['mH']), pars)
-                self.doHistFunc('mh', f.Get(hd['mh']), pars)
+                #self.doHistFunc('mH', f.Get(hd['mH']), pars)
+                #self.doHistFunc('mh', f.Get(hd['mh']), pars)
+                # HOTFIX: set mX values < 80 to 80
+                hist_H = f.Get(hd['mH']).Clone()
+                nbins_H = hist_H.GetNcells()
+                print "Overwriting values of mH < 80 GeV; number of bins:",nbins_H
+                for i in range(nbins_H):
+                    if hist_H.GetBinContent(i) < 80.0:
+                        hist_H.SetBinContent(i,80.0)
+                self.doHistFunc('mH', hist_H, pars)
+
+                hist_h = f.Get(hd['mh']).Clone()
+                nbins_h = hist_h.GetNcells()
+                print "Overwriting values of mh < 80 GeV; number of bins:",nbins_h
+                for i in range(nbins_h):
+                    if hist_h.GetBinContent(i) < 80.0:
+                        hist_h.SetBinContent(i,80.0)
+                self.doHistFunc('mh', hist_h, pars)
             #! [part1]
                 self.doHistFunc('mHp', f.Get(hd['mHp']), pars)
                 doneMasses = True
