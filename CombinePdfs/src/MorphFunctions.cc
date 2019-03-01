@@ -421,16 +421,57 @@ std::string BuildRooMorphing(RooWorkspace& ws, CombineHarvester& cb,
   // Create a corresponding rate array with 0 entries for these new masses
   multi_array<double, 1> new_rate_arr(extents[m+2]);
   multi_array<double, 1> new_rate_unc_arr(extents[m+2]);
+
   new_rate_arr[0] = rate_arr[0];
   new_rate_unc_arr[0] = rate_unc_arr[0];
+
   for(unsigned i = 0; i < m; ++i)
   {
         new_rate_arr[i+1] = rate_arr[i] ;
         new_rate_unc_arr[i+1] = rate_unc_arr[i] ;
   }
+
   new_rate_arr[m+1] = rate_arr[m-1];
   new_rate_unc_arr[m+1] = rate_unc_arr[m-1];
+
+  // Create a corresponding shape systematics array with 0 entries for these new masses
+  multi_array<double, 2> new_ss_k_hi_arr(extents[ss][m+2]);
+  multi_array<double, 2> new_ss_k_lo_arr(extents[ss][m+2]);
+
+  for (unsigned ssi = 0; ssi < ss; ++ssi) {
+
+      new_ss_k_hi_arr[ssi][0] = ss_k_hi_arr[ssi][0];
+      new_ss_k_lo_arr[ssi][0] = ss_k_lo_arr[ssi][0];
+
+      for(unsigned i = 0; i < m; ++i)
+      {
+          new_ss_k_hi_arr[ssi][i+1] = ss_k_hi_arr[ssi][i];
+          new_ss_k_lo_arr[ssi][i+1] = ss_k_lo_arr[ssi][i];
+      }
+
+      new_ss_k_hi_arr[ssi][m+1] = ss_k_hi_arr[ssi][m-1];
+      new_ss_k_lo_arr[ssi][m+1] = ss_k_lo_arr[ssi][m-1];
+  }
  
+  // Create a corresponding lnN systematics array with 0 entries for these new masses
+  multi_array<double, 2> new_lms_k_hi_arr(extents[lms][m+2]);
+  multi_array<double, 2> new_lms_k_lo_arr(extents[lms][m+2]);
+
+  for (unsigned lmsi = 0; lmsi < lms; ++lmsi) {
+
+      new_lms_k_hi_arr[lmsi][0] = lms_k_hi_arr[lmsi][0];
+      new_lms_k_lo_arr[lmsi][0] = lms_k_lo_arr[lmsi][0];
+
+      for(unsigned i = 0; i < m; ++i)
+      {
+          new_lms_k_hi_arr[lmsi][i+1] = lms_k_hi_arr[lmsi][i];
+          new_lms_k_lo_arr[lmsi][i+1] = lms_k_lo_arr[lmsi][i];
+      }
+
+      new_lms_k_hi_arr[lmsi][m+1] = lms_k_hi_arr[lmsi][m-1];
+      new_lms_k_lo_arr[lmsi][m+1] = lms_k_lo_arr[lmsi][m-1];
+  }
+
   if (verbose && force_template_limit) {
      std::cout << ">>>> Forcing rate to values at range borders outside of template range:" << "\n";
      for(unsigned mi = 0; mi < m+2; ++mi) {
@@ -462,14 +503,14 @@ std::string BuildRooMorphing(RooWorkspace& ws, CombineHarvester& cb,
   for (unsigned ssi = 0; ssi < ss; ++ssi) {
     ss_spl_hi_arr[ssi] = std::make_shared<RooSpline1D>("spline_hi_" +
         key + "_" + ss_vec[ssi], "", mass_var, force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(),
-        ss_k_hi_arr[ssi].origin(), interp);
+        force_template_limit ? new_ss_k_hi_arr[ssi].origin() : ss_k_hi_arr[ssi].origin(), interp);
     ss_spl_lo_arr[ssi] = std::make_shared<RooSpline1D>("spline_lo_" +
         key + "_" + ss_vec[ssi], "", mass_var, force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(),
-        ss_k_lo_arr[ssi].origin(), interp);
+        force_template_limit ? new_ss_k_lo_arr[ssi].origin() : ss_k_lo_arr[ssi].origin(), interp);
     if (file) {
-      TGraph tmp_hi(force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(), ss_k_hi_arr[ssi].origin());
+      TGraph tmp_hi(force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(), force_template_limit ? new_ss_k_hi_arr[ssi].origin() : ss_k_hi_arr[ssi].origin());
       file->WriteTObject(&tmp_hi, "spline_hi_" + key + "_" + ss_vec[ssi]);
-      TGraph tmp_lo(force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(), ss_k_lo_arr[ssi].origin());
+      TGraph tmp_lo(force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(), force_template_limit ? new_ss_k_lo_arr[ssi].origin() : ss_k_lo_arr[ssi].origin());
       file->WriteTObject(&tmp_lo, "spline_lo_" + key + "_" + ss_vec[ssi]);
     }
     // Then build the AsymPow object for each systematic as a function of the
@@ -485,10 +526,16 @@ std::string BuildRooMorphing(RooWorkspace& ws, CombineHarvester& cb,
   for (unsigned lmsi = 0; lmsi < lms; ++lmsi) {
     lms_spl_hi_arr[lmsi] = std::make_shared<RooSpline1D>("spline_hi_" +
         key + "_" + lms_vec[lmsi], "", mass_var, force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(),
-        lms_k_hi_arr[lmsi].origin(), interp);
+        force_template_limit ? new_lms_k_hi_arr[lmsi].origin() : lms_k_hi_arr[lmsi].origin(), interp);
     lms_spl_lo_arr[lmsi] = std::make_shared<RooSpline1D>("spline_lo_" +
         key + "_" + lms_vec[lmsi], "", mass_var, force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(),
-        lms_k_lo_arr[lmsi].origin(), interp);
+        force_template_limit ? new_lms_k_lo_arr[lmsi].origin() : lms_k_lo_arr[lmsi].origin(), interp);
+    if (file) {
+      TGraph tmp_lms_hi(force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(), force_template_limit ? new_lms_k_hi_arr[lmsi].origin() : lms_k_hi_arr[lmsi].origin());
+      file->WriteTObject(&tmp_lms_hi, "spline_hi_" + key + "_" + lms_vec[lmsi]);
+      TGraph tmp_lms_lo(force_template_limit ? m+2 : m, force_template_limit ? new_m_vec.data() : m_vec.data(), force_template_limit ? new_lms_k_lo_arr[lmsi].origin() : lms_k_lo_arr[lmsi].origin());
+      file->WriteTObject(&tmp_lms_lo, "spline_lo_" + key + "_" + lms_vec[lmsi]);
+    }
     lms_asy_arr[lmsi] = std::make_shared<AsymPow>("systeff_" +
         key + "_" + lms_vec[lmsi], "", *(lms_spl_lo_arr[lmsi]),
         *(lms_spl_hi_arr[lmsi]), *(lms_var_arr[lmsi]));
